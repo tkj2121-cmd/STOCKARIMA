@@ -22,33 +22,28 @@ st.caption("Flexible forecasting tool for any NSE/BSE/Global ticker")
 # ── Sidebar: User Inputs ──────────────────────
 st.sidebar.header("⚙️ Configuration")
 
-# Ticker input
 ticker_input = st.sidebar.text_input(
     "Stock Ticker Symbol",
     value="TCS.NS",
     help="Examples: TCS.NS, RELIANCE.NS, INFY.NS, AAPL, TSLA, ^NSEI"
 )
 
-# Date range
 col1, col2 = st.sidebar.columns(2)
 with col1:
     start_date = st.date_input("Start Date", value=pd.to_datetime("2021-01-01"))
 with col2:
     end_date = st.date_input("End Date", value=pd.to_datetime("2025-01-31"))
 
-# Forecast horizon
 forecast_days = st.sidebar.slider(
     "Forecast Horizon (Trading Days)",
     min_value=3, max_value=30, value=7, step=1
 )
 
-# ARIMA order
 st.sidebar.subheader("ARIMA Parameters")
 p_order = st.sidebar.number_input("p (AR order)", min_value=0, max_value=10, value=3)
 d_order = st.sidebar.number_input("d (Integration)", min_value=0, max_value=2, value=1)
 q_order = st.sidebar.number_input("q (MA order)", min_value=0, max_value=10, value=2)
 
-# Moving average windows
 ma_short = st.sidebar.number_input("Short-term MA window", min_value=3, max_value=30, value=7)
 ma_long  = st.sidebar.number_input("Long-term MA window",  min_value=10, max_value=200, value=50)
 
@@ -80,7 +75,6 @@ if run_button:
         st.error(f"❌ No data found for ticker **{ticker}**. Please check the symbol and try again.")
         st.stop()
 
-    # Flatten MultiIndex if present
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -122,10 +116,10 @@ if run_button:
     st.subheader(f"🔄 Rolling {forecast_days}-Day Validation")
 
     with st.spinner("Running rolling forecast on validation set..."):
-        history = train.copy()  # keeps datetime index — fixes ValueWarning & FutureWarning
+        history = train.copy()
         predictions = []
         for date, actual in test.items():
-            model = ARIMA(history, order=(int(p_order), int(d_order), int(q_order))).fit(maxiter=200)  # maxiter fixes ConvergenceWarning
+            model = ARIMA(history, order=(int(p_order), int(d_order), int(q_order))).fit()
             yhat = model.forecast(steps=1).iloc[0]
             predictions.append(yhat)
             new_row = pd.Series([actual], index=[date])
@@ -148,16 +142,16 @@ if run_button:
 
     # ── Section 6: Validation Table ──────────
     validation_df = pd.DataFrame({
-        "Date":             test.index.strftime("%d %b %Y"),
-        "Actual Price":     test.values.round(2),
-        "Predicted Price":  pred_series.values.round(2),
-        "Error":            (test.values - pred_series.values).round(2)
+        "Date":            test.index.strftime("%d %b %Y"),
+        "Actual Price":    test.values.round(2),
+        "Predicted Price": pred_series.values.round(2),
+        "Error":           (test.values - pred_series.values).round(2)
     })
     st.dataframe(validation_df, use_container_width=True)
 
     # ── Section 7: Final Forecast ─────────────
     with st.spinner("Generating future forecast..."):
-        final_model = ARIMA(df['Close'], order=(int(p_order), int(d_order), int(q_order))).fit(maxiter=200)
+        final_model = ARIMA(df['Close'], order=(int(p_order), int(d_order), int(q_order))).fit()
         future_forecast = final_model.forecast(steps=forecast_days)
 
     future_dates = pd.bdate_range(
@@ -168,7 +162,7 @@ if run_button:
     currency = "₹" if (".NS" in ticker or ".BO" in ticker) else ""
 
     forecast_df = pd.DataFrame({
-        "Date":                  future_dates.strftime("%d %b %Y"),
+        "Date":                          future_dates.strftime("%d %b %Y"),
         f"Predicted Price ({currency})": future_forecast.values.round(2)
     })
 
@@ -186,7 +180,6 @@ if run_button:
     ax2.plot(future_dates, future_forecast.values,
              linestyle='--', marker='s', markersize=5,
              color="#d62728", label=f"{forecast_days}-Day Forecast")
-
     ax2.fill_between(future_dates,
                      future_forecast.values * 0.97,
                      future_forecast.values * 1.03,
@@ -195,7 +188,6 @@ if run_button:
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%d %b'))
     ax2.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
     fig2.autofmt_xdate()
-
     ax2.set_title(f"{ticker} — {forecast_days}-Day Price Forecast (ARIMA {p_order},{d_order},{q_order})")
     ax2.set_ylabel("Price")
     ax2.legend()
@@ -207,8 +199,8 @@ if run_button:
     st.subheader("⬇️ Download Results")
 
     combined = pd.DataFrame({
-        "Date":   future_dates.strftime("%d %b %Y"),
-        "Ticker": ticker,
+        "Date":            future_dates.strftime("%d %b %Y"),
+        "Ticker":          ticker,
         "Predicted Price": future_forecast.values.round(2)
     })
 
@@ -234,7 +226,7 @@ else:
     | Crypto | `BTC-USD`, `ETH-USD` |
 
     ### ARIMA Parameters (p, d, q)
-    - **p**: Number of lag observations (autoregressive part). Try 1–5.
+    - **p**: Number of lag observations (AR part). Try 1–5.
     - **d**: Degree of differencing. Usually 1 for stock prices.
-    - **q**: Size of moving average window. Try 1–3.
+    - **q**: Moving average window. Try 1–3.
     """)
